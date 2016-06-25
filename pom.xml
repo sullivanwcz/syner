@@ -4,7 +4,7 @@
 
   <groupId>midas-syn</groupId>
   <artifactId>midas-syner</artifactId>
-  <version>0.0.1-SNAPSHOT</version>
+  <version>V1</version>
   <packaging>jar</packaging>
 
   <name>midas-syner</name>

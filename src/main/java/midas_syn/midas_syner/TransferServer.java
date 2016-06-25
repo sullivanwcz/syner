@@ -10,6 +10,12 @@ import java.io.FileOutputStream;
     import java.util.concurrent.ExecutorService;  
     import java.util.concurrent.Executors;  
       
+    
+    /**
+     * 
+     * @author sullivan
+     *
+     */
     public class TransferServer {  
       
         private int defaultBindPort = Constants.DEFAULT_BIND_PORT;    //默认监听端口号为10000  
@@ -55,7 +61,7 @@ import java.io.FileOutputStream;
         private void bingToServerPort(int port) throws Exception{  
             try {  
                 serverSocket = new ServerSocket(port);  
-                System.out.println(port);  
+                System.out.println("服务端口号:"+port);  
                 System.out.println("服务启动!");  
             } catch (Exception e) {  
                 this.tryBindTimes = this.tryBindTimes + 1;  
@@ -104,19 +110,30 @@ import java.io.FileOutputStream;
                 try {  
                     dis = new DataInputStream(new BufferedInputStream(socket.getInputStream()));  
                    String savePath = receivePath+File.separator+ dis.readUTF();  
+                   savePath=savePath.substring(0,savePath.lastIndexOf("_trans_"));
                     long length = dis.readLong();  
-                    File file=new File(receivePath);
-                    if (!file.exists()) {
-                   	 file.mkdirs();						
+                    File dirpath=new File(receivePath);
+                    File filepath=new File(savePath);
+                    if (!dirpath.exists()) {
+                    	dirpath.mkdirs();						
+					}
+                    if (filepath.exists()) {
+                    	savePath=savePath+Math.round(Math.random()*1000);
 					}
                     dos = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(savePath)));  
                   
                     int read = 0;  
                     long passedlen = 0;  
+                    String processStr="";
                     while ((read = dis.read(buf)) != -1) {  
                         passedlen += read;  
                         dos.write(buf, 0, read);  
-                        System.out.println("文件[" + savePath + "]已经接收: " + passedlen * 100L/ length + "%");  
+					String processStrtmp = passedlen * 100L / length + "%";
+					if (!processStr.equals(processStrtmp) ) {
+						
+						System.out.println("文件[" + savePath + "]已经接收: " + processStrtmp);
+					   }
+					processStr = processStrtmp;
                     }  
                     System.out.println("文件: " + savePath + "接收完成!");  
                       

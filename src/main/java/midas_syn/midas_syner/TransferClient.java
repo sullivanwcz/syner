@@ -5,26 +5,36 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.net.Socket;
+import java.nio.file.WatchEvent;
 import java.util.ArrayList;
 import java.util.Random;
 import java.util.Vector;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+/**
+ * 
+ * @author sullivan
+ *
+ */
 public class TransferClient {
 
 	private static ArrayList<String> fileList = new ArrayList<String>();
 
 	private String sendFilePath = Constants.SEND_FILE_PATH;
 
-	private final int POOL_SIZE = 4; // 单个CPU的线程池大小
+	private  int POOL_SIZE = 4; // 单个CPU的线程池大小
 
 	private String serverIp = "";
 
 	private int port = 0;
 
 	private Long interval = 5000L;
+	
+	private String scanSuffix=".midas";
+	
 
 	/**
 	 * 带参数的构造器，用户设定需要传送文件的文件夹
@@ -46,13 +56,19 @@ public class TransferClient {
 
 	}
 
-	public TransferClient(String server, int port, String sendFilePath, Long interval) {
+	public TransferClient(String server, int port, String sendFilePath, Long interval,String scanSuffix,int threadsize) {
 		this.serverIp = server;
 		this.port = port;
 		this.sendFilePath = sendFilePath;
 		if (interval > this.interval) {
 			this.interval = interval;
 		}
+		if(null!=scanSuffix&&!"".equals(scanSuffix)&&!"_trans_".equals(scanSuffix))
+		{
+			this.scanSuffix=scanSuffix;
+		}
+		if(threadsize<4)
+		this.POOL_SIZE=threadsize;
 
 	}
 
@@ -81,7 +97,7 @@ public class TransferClient {
 			for (Integer integer : vector) {
 				String filePath = fileList.get(integer.intValue());
 				executorService.execute(new SendFileTask(serverIp, port, filePath));
-				// vector.remove(integer.intValue());
+				//fileList.remove(integer.intValue());
 			}
 		}
 
@@ -102,8 +118,17 @@ public class TransferClient {
 			if (files[i].isDirectory()) {
 				getFilePath(files[i].getAbsolutePath());
 			} else {
-				if(files[i].getName().endsWith(".midas")){
-				fileList.add(files[i].getAbsolutePath());
+				if("*".equals(scanSuffix))//匹配所有文件
+				{
+					if (!files[i].getName().endsWith("_trans_")) {
+						fileList.add(files[i].getAbsolutePath());
+					}
+					
+				}
+				else{
+					if(files[i].getName().endsWith(scanSuffix.trim())){
+				     fileList.add(files[i].getAbsolutePath());
+					}
 				}
 			}
 		}
@@ -123,66 +148,7 @@ public class TransferClient {
 		return v;
 	}
 
-	// private static Runnable sendFile(final String filePath){
-	//
-	// return new Runnable( ){
-	//
-	// private Socket socket = null;
-	// private String ip ="127.0.0.1";
-	// private int port = 10000;
-	//
-	// public void run() {
-	// System.out.println("开始发送文件:" + filePath);
-	// File file = new File(filePath);
-	// if(createConnection()){
-	// int bufferSize = 8192;
-	// byte[] buf = new byte[bufferSize];
-	// try {
-	// DataInputStream fis = new DataInputStream(new BufferedInputStream(new
-	// FileInputStream(filePath)));
-	// DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
-	//
-	// dos.writeUTF(file.getName()+".trans");
-	// dos.flush();
-	// dos.writeLong(file.length());
-	// dos.flush();
-	//
-	// int read = 0;
-	// int passedlen = 0;
-	// long length = file.length(); //获得要发送文件的长度
-	// while ((read = fis.read(buf)) != -1) {
-	// passedlen += read;
-	// System.out.println("已经完成文件 [" + file.getName() + "]百分比: " + passedlen *
-	// 100L/ length + "%");
-	// dos.write(buf, 0, read);
-	// }
-	//
-	// dos.flush();
-	// fis.close();
-	// dos.close();
-	// socket.close();
-	// System.out.println("文件 " + filePath + "传输完成!");
-	//
-	// file.delete();
-	// } catch (Exception e) {
-	// e.printStackTrace();
-	// }
-	// }
-	// }
-	//
-	// private boolean createConnection() {
-	// try {
-	// socket = new Socket(ip, port);
-	// System.out.println("连接服务器成功！");
-	// return true;
-	// } catch (Exception e) {
-	// System.out.println("连接服务器失败！");
-	// return false;
-	// }
-	// }
-	//
-	// };
-	// }
+
 
 	class SendFileTask implements Runnable {
 		private Socket socket = null;
@@ -198,15 +164,29 @@ public class TransferClient {
 
 		public void run() {
 			System.out.println("开始发送文件:" + filePath);
-			File file = new File(filePath);
+			File oldfile = new File(filePath);
+			File file=new File(filePath+"_trans_");
+			
+		
 			if (createConnection()) {
+			if (file.exists()) {
+				file=new File(filePath+"_trans_"+Math.round(Math.random()*1000));
+			}
 				int bufferSize = 8192;
 				byte[] buf = new byte[bufferSize];
 				try {
-					DataInputStream fis = new DataInputStream(new BufferedInputStream(new FileInputStream(filePath)));
+		
+					boolean isReady=oldfile.renameTo(file);
+				    if(!isReady)
+				    {
+				     throw new Exception(filePath+" 文件被占用中,稍后重试上传");
+				    // System.out.println(filePath+" 文件被占用中,稍后重试上传");
+				   //  return ;
+				    }
+					DataInputStream fis = new DataInputStream(new BufferedInputStream(new FileInputStream(file)));
 					DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
 
-					dos.writeUTF(file.getName() + ".trans");
+					dos.writeUTF(file.getName());
 					dos.flush();
 					dos.writeLong(file.length());
 					dos.flush();
@@ -214,23 +194,38 @@ public class TransferClient {
 					int read = 0;
 					int passedlen = 0;
 					long length = file.length(); // 获得要发送文件的长度
+				     String processStr="";
+				
 					while ((read = fis.read(buf)) != -1) {
 						passedlen += read;
-						System.out.println("已经完成文件 [" + file.getName() + "]百分比: " + passedlen * 100L / length + "%");
+						String processStrtmp = passedlen * 100L / length + "%";
+						if (!processStr.equals(processStrtmp) ) {
+							
+							System.out.println("已经完成文件 [" + file.getName() + "]百分比: "+ processStrtmp);
+						   }
+						processStr = processStrtmp;
 						dos.write(buf, 0, read);
 					}
 
 					dos.flush();
 					fis.close();
 					dos.close();
-					socket.close();
 					System.out.println("文件 " + filePath + "传输完成!");
 
 					file.delete();
-				} catch (Exception e) {
+				} catch (Exception e){
 					e.printStackTrace();
 				}
+				finally {
+					try {
+						socket.close();
+					} catch (IOException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+				}
 			}
+
 		}
 
 		private boolean createConnection() {
