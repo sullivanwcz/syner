@@ -31,7 +31,7 @@ public class TransferClient {
 
 	private int port = 0;
 
-	private Long interval = 5000L;
+	private Long interval = 1000L;
 	
 	private String scanSuffix=".midas";
 	
